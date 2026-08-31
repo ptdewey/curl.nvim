@@ -1,5 +1,4 @@
 local M = {}
-local Path = require("plenary.path")
 local notify = require("curl.notifications")
 
 ---comment
@@ -16,14 +15,14 @@ local function get_custom_dir(global)
 end
 
 local curl_cache_dir = function(custom_dir)
-	local cache_dir = Path:new(vim.fn.stdpath("data")) / "curl_cache" ---@type Path
+	local cache_dir = vim.fs.joinpath(vim.fn.stdpath("data"), "curl_cache")
 
 	if custom_dir then
-		cache_dir = cache_dir / custom_dir ---@type Path
+		cache_dir = vim.fs.joinpath(cache_dir, custom_dir)
 	end
 
-	if vim.fn.mkdir(cache_dir:absolute(), "p") ~= 1 then
-		notify.error("Error creating collection: could not create directory : " .. cache_dir:absolute())
+	if vim.fn.mkdir(cache_dir, "p") ~= 1 and vim.uv.fs_stat(cache_dir) == nil then
+		notify.error("Error creating collection: could not create directory : " .. cache_dir)
 	end
 
 	return cache_dir
@@ -36,16 +35,14 @@ M.load_custom_command_file = function(filename, global)
 	local cache_dir = curl_cache_dir(custom_dir)
 
 	local curl_filename = filename .. ".curl"
-	local custom_cache_dir = cache_dir / curl_filename ---@type Path
-	return custom_cache_dir:absolute()
+	return vim.fs.joinpath(cache_dir, curl_filename)
 end
 
 ---@return string
 M.load_global_command_file = function()
 	local cache_dir = curl_cache_dir()
 
-	local global_cache_file = cache_dir / "global.curl" ---@type Path
-	return global_cache_file:absolute()
+	return vim.fs.joinpath(cache_dir, "global.curl")
 end
 
 ---@return string
@@ -56,33 +53,31 @@ M.load_command_file = function()
 	local unique_id = vim.fn.fnamemodify(workspace_path, ":t") .. "_" .. vim.fn.sha256(workspace_path):sub(1, 8) ---@type string
 	local new_file_name = unique_id .. ".curl"
 
-	local old_cache_file = cache_dir / vim.fn.sha256(workspace_path) ---@type Path
-	local new_cache_file = cache_dir / new_file_name ---@type Path
+	local old_cache_file = vim.fs.joinpath(cache_dir, vim.fn.sha256(workspace_path))
+	local new_cache_file = vim.fs.joinpath(cache_dir, new_file_name)
 
-	if old_cache_file:exists() then
-		if not new_cache_file:exists() then
-			old_cache_file:rename({ new_name = new_cache_file:absolute() })
+	if vim.uv.fs_stat(old_cache_file) then
+		if vim.uv.fs_stat(new_cache_file) == nil then
+			os.rename(old_cache_file, new_cache_file)
 		else
-			local archive_file = cache_dir / (vim.fn.sha256(workspace_path) .. ".archive") ---@type Path
-			old_cache_file:rename({ new_name = archive_file:absolute() })
+			local archive_file = vim.fs.joinpath(cache_dir, vim.fn.sha256(workspace_path) .. ".archive")
+			os.rename(old_cache_file, archive_file)
 		end
 	end
 
-	return new_cache_file:absolute()
+	return new_cache_file
 end
 
 ---@param global boolean set to true to search global scorep
 ---@return table Table of collection in the given scope
 M.get_collections = function(global)
-	local collection_dir = curl_cache_dir(get_custom_dir(global)):absolute()
-
-	local scan = require("plenary.scandir")
-
-	local filepaths = scan.scan_dir(collection_dir, { depth = 1 }) ---@type string[]
+	local collection_dir = curl_cache_dir(get_custom_dir(global))
 
 	local files = {}
-	for _, filepath in ipairs(filepaths) do
-		table.insert(files, vim.fn.fnamemodify(filepath, ":t:r"))
+	for name, file_type in vim.fs.dir(collection_dir) do
+		if file_type == "file" then
+			table.insert(files, vim.fn.fnamemodify(name, ":r"))
+		end
 	end
 
 	return files

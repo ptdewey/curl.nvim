@@ -91,8 +91,7 @@ T["Parser"]["can parse list after headers"] = function()
 end
 
 T["Parser"]["can parse large command"] = function()
-  local Path = require("plenary.path")
-  local curl_output = Path:new("tests/tests/parser/big.json"):read()
+  local curl_output = table.concat(vim.fn.readfile("tests/tests/parser/big.json"), "\n")
 
   local parsed_output = output_parser.parse_curl_output(curl_output)
 

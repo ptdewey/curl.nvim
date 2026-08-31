@@ -29,6 +29,7 @@ still using the knowledge of curl you already have.
 
 - [Curl](https://curl.se)
 - [jq](https://jqlang.github.io/jq/),
+- Neovim 0.11 or newer
 - Linux/Mac (I dont have a windows machine to test, feel free to create a PR)
 
 Installation example for [Lazy](https://github.com/folke/lazy.nvim):
@@ -37,10 +38,7 @@ Installation example for [Lazy](https://github.com/folke/lazy.nvim):
 {
   "oysandvik94/curl.nvim",
   cmd = { "CurlOpen" },
-  dependencies = {
-  "nvim-lua/plenary.nvim",
-},
-config = true,
+  config = true,
 }
 ```
 

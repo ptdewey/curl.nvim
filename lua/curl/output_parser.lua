@@ -1,33 +1,22 @@
 local M = {}
 
-local Job = require("plenary.job")
 local notify = require("curl.notifications")
 
----comment Run jq through plenary
+--- Run jq synchronously using Neovim's native process API.
 ---@param unformatted_json string
 ---@return table
 local function run_jq(unformatted_json)
-	local result = {}
+	local result = vim.system({ "jq", "." }, { stdin = unformatted_json }):wait()
+	if result.code ~= 0 then
+		notify.error("Failed to parse JSON")
+		return { unformatted_json }
+	end
 
-	Job:new({
-		command = "jq",
-		args = { "." },
-		writer = unformatted_json,
-		on_stdout = function(_, line)
-			table.insert(result, line)
-		end,
-		on_exit = function(_, return_val)
-			if return_val ~= 0 then
-				vim.schedule(function()
-					notify.error("Failed to parse JSON")
-				end)
-
-				result = { unformatted_json }
-			end
-		end,
-	}):sync()
-
-	return result
+	local output = vim.split(result.stdout or "", "\n", { plain = true })
+	if output[#output] == "" then
+		table.remove(output)
+	end
+	return output
 end
 
 local function trim(s)
