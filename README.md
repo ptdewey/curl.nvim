@@ -88,6 +88,11 @@ plugin's run action selects only one block.
 
 ## Results and cancellation
 
+With `mini.notify` configured before running a request, a notification shows a
+spinner and elapsed seconds, then disappears when the request ends. Without it,
+the plugin sends one ordinary `vim.notify` message when the request starts.
+No percentage is shown because arbitrary shell requests have no known total.
+
 All scripts share one scratch response buffer and reuse its split. Each finished
 request replaces the displayed result with its title, working directory, process
 exit status, elapsed time, stdout, and stderr. Both streams remain available after

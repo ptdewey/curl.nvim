@@ -65,9 +65,11 @@ end
 
 T["notebook API"]["updates elapsed seconds during a real request and clears silently on success"] = function()
   child.lua([[
-    local messages, progress = {}, {}
+    local notifier = require("mini.notify")
+    notifier.setup()
+    local messages = {}
     vim.notify = function(message) messages[#messages + 1] = message end
-    vim.api.nvim_echo = function(chunks) progress[#progress + 1] = chunks[1][1] end
+    vim.api.nvim_echo = function() error("unexpected command-line progress") end
     local source = vim.api.nvim_get_current_buf()
     vim.api.nvim_buf_set_lines(source, 0, -1, false, { "### slow", "sleep 1.2; printf done" })
     vim.api.nvim_win_set_cursor(0, { 2, 0 })
@@ -75,16 +77,16 @@ T["notebook API"]["updates elapsed seconds during a real request and clears sile
     assert(vim.wait(5000, function()
       return vim.fn.bufnr("Curl notebook output") ~= -1
     end, 10), "request did not finish")
-    local counted_seconds = false
-    for _, message in ipairs(progress) do
-      counted_seconds = counted_seconds or message:find("slow (1s)", 1, true) ~= nil
-    end
-    assert(counted_seconds, vim.inspect(progress))
-    assert(progress[#progress] == "")
+    local history = notifier.get_all()
+    assert(#history == 1, vim.inspect(history))
+    local progress = history[1]
+    assert(progress.data.source == "curl.nvim")
+    assert(progress.msg:find("slow (1s)", 1, true), progress.msg)
+    assert(progress.ts_remove ~= nil, "progress notification still active")
+    assert(#vim.api.nvim_list_wins() == 2, "notification window still open")
     assert(#messages == 0, vim.inspect(messages))
-    local count = #progress
     vim.wait(150)
-    assert(#progress == count, "progress continued after completion")
+    assert(vim.deep_equal(notifier.get_all(), history), "progress continued after completion")
   ]])
 end
 
