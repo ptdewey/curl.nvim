@@ -20,7 +20,9 @@ local T = new_set({
 
 T["api"] = new_set()
 T["api"]["can curl something"] = function()
-  local curl_command = "curl https://jsonplaceholder.typicode.com/todos/1"
+  local fixture = vim.fn.tempname()
+  vim.fn.writefile({ [[{"userId":1,"id":1,"title":"delectus aut autem","completed":false}]] }, fixture)
+  local curl_command = "curl " .. vim.fn.shellescape("file://" .. fixture)
 
   child.lua([[
     require("curl").open_curl_tab()
@@ -32,7 +34,12 @@ T["api"]["can curl something"] = function()
     require("curl").execute_curl()
   ]])
 
-  os.execute("sleep 1")
+  child.lua([[
+    assert(vim.wait(5000, function()
+      return OUTPUT_BUF_ID ~= -1 and vim.api.nvim_buf_is_valid(OUTPUT_BUF_ID)
+    end, 10), "response buffer was not opened")
+  ]])
+  vim.fn.delete(fixture)
   child.cmd("wincmd l")
   local output = child.api.nvim_buf_get_lines(0, 0, -1, false)
 

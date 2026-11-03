@@ -82,6 +82,16 @@ local create_filetype = function()
 end
 
 function M.setup(opts)
+	vim.api.nvim_create_user_command("CurlRun", function()
+		api.execute_notebook()
+	end, {
+		desc = "Run the notebook request under the cursor",
+	})
+	vim.api.nvim_create_user_command("CurlCancel", function()
+		api.cancel_notebook()
+	end, {
+		desc = "Cancel the notebook request for this buffer",
+	})
 	create_curl_open()
 	create_curl_pick()
 

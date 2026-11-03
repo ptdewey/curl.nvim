@@ -18,6 +18,12 @@ local T = new_set({
 })
 
 T["Curl files"] = new_set()
+T["Curl files"]["does not require an installed bash parser"] = function()
+  child.lua([[vim.treesitter.get_parser = function() return nil end]])
+  child.cmd("e parser_missing.curl")
+  MiniTest.expect.equality(child.bo.filetype, "curl")
+end
+
 T["Curl files"]["can execute and automatically open buffer"] = function()
   child.cmd("e test_hehe.curl")
   local keymap = child.api.nvim_buf_get_keymap(0, "n")[1]

@@ -102,6 +102,94 @@ end, { desc = "Choose a global collection and open it" })
 
 To verify the installation run `:checkhealth curl`.
 
+## Request notebooks
+
+Enable notebook execution for the Enter mapping:
+
+```lua
+require("curl").setup({
+  notebook_mode = true,
+  notebook_shell = { "bash", "--noprofile", "--norc" },
+})
+```
+
+Open a `.curl` file and run `:CurlRun` with the cursor in a request.
+`:CurlRun` always uses notebook semantics, even without `notebook_mode`.
+`:CurlCancel` cancels the current source buffer's request. The Lua equivalents
+are `require("curl").execute_notebook()` and `require("curl").cancel_notebook()`.
+
+```sh
+ENV=local
+case "$ENV" in
+  local) BASE_URL=http://localhost:8099 ;;
+  dev) BASE_URL=https://dev.example.invalid ;;
+  *) printf 'Unknown environment: %s\n' "$ENV" >&2; exit 1 ;;
+esac
+
+### Read application
+APPLICATION_ID=48047
+curl --silent --show-error "$BASE_URL/applications/$APPLICATION_ID"
+
+### Create application
+curl --silent --show-error "$BASE_URL/applications" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Example"
+  }'
+```
+
+Everything before the first marker is shared setup. A marker starts at column
+one with `###`, followed by whitespace and a title, or the end of the line.
+Matching lines are reserved even inside quoted strings and heredocs. Indented
+markers and `###word` are ordinary source text. Keep quotes, heredocs, and shell
+control structures within one section.
+
+The marker and all following lines up to the next marker belong to that request,
+including blank lines. A cursor in setup, a missing marker, or an empty/comment-only
+block produces a message without launching a shell. The plugin runs all code in
+the selected block, not just the curl call.
+
+Each invocation reads unsaved buffer contents and runs setup once, followed by
+only the selected block, in a fresh asynchronous shell. Local assignments override
+setup; other blocks and previous runs contribute no shell state. The child inherits
+Neovim's environment but cannot change it. A final nonzero setup status or explicit
+`exit` prevents request execution. Check intermediate setup failures yourself, or
+use an appropriate shell option: the plugin does not enable `set -e` for you.
+
+Relative paths resolve against the request file's directory, or Neovim's current
+directory for an unnamed buffer. The response shows that directory, request title,
+exit status, elapsed time, stdout, and stderr. JSON is formatted and automatically gets a `json` output buffer for syntax
+highlighting; metadata and stderr remain visually separate. Text and empty
+responses use a plain-text buffer. Invalid JSON and output before failure remain available.
+Use curl's `--include` when you want headers. HTTP 4xx/5xx responses do not imply
+a nonzero process status unless your command uses `--fail` or a similar option.
+
+Only one request may run per source buffer. Cancel or wait before starting another.
+Cancellation stops the shell and its request children; it cannot undo server-side
+effects. Opening, editing, and saving do not run a request. There is no automatic
+save requirement or response history.
+
+**Run only trusted notebooks.** Setup and request blocks are executable shell code,
+including substitutions and sourced files. Execution is not a sandbox. No `.env`
+file is sourced automatically. The configured shell must be installed; the plugin
+does not fall back to another dialect. Bash startup files, including `BASH_ENV`,
+are disabled by default. Literal notebook secrets remain plaintext on disk.
+
+### Migrating legacy collections
+
+Legacy execution remains the default (`notebook_mode = false`). The formatting
+and variable features below describe that legacy mode. To migrate, replace
+`---name=value` directives with shell assignments, put shared setup before the
+first `###` marker, and give each request its own marker. Add shell quotes around
+JSON and backslashes for continued command lines. Single-quoted bodies are literal;
+use shell quoting or an unquoted heredoc for interpolation.
+
+Notebook execution bypasses legacy parsing, environment mutation, `curl_binary`,
+`default_flags`, and `execute_whole_buffer`. No curl options are injected. Select a
+custom curl executable in the shell source, for example through `PATH` or a shell
+function. Existing collection storage is unchanged. See
+[`examples/requests.curl`](examples/requests.curl) for a local-service notebook.
+
 ## Configuration
 
 You can configure curl.nvim by running the `curl.setup()` function, passing a table as the argument.
@@ -115,6 +203,8 @@ Or if you use [Lazy](https://github.com/folke/lazy.nvim), just pass the table in
 {
   -- Table of strings to specify default headers to be included in each request, i.e. "-i"
   default_flags = {},
+  notebook_mode = false,
+  notebook_shell = { "bash", "--noprofile", "--norc" },
   -- Specify an alternative curl binary that will be used to run curl commands
   -- String of either full path, or binary in path
   curl_binary = nil,

@@ -10,6 +10,8 @@ local default_config = {
 	open_with = "tab", -- tab or (v)split or buffer
 	---@type "vertical"|"horizontal"
 	output_split_direction = "vertical", -- how to split the output buffer
+	notebook_mode = false,
+	notebook_shell = { "bash", "--noprofile", "--norc" },
 	---@type table<'execute_curl', string>
 	mappings = {
 		execute_curl = "<CR>",

@@ -11,15 +11,9 @@ vim.api.nvim_buf_set_keymap(
 	{ noremap = true, silent = true, desc = "Execute Curl" }
 )
 
-vim.api.nvim_create_autocmd({ "InsertLeave", "TextChanged" }, {
-	command = "silent w",
-	buffer = 0,
-	nested = true,
-})
-
 vim.treesitter.language.register("bash", "curl")
-local bash_lang_installed, _ = pcall(vim.treesitter.get_parser, 0, "bash")
-if bash_lang_installed then
-	require("curl.treesitter").add_treesitter_highlighting()
+local parser_ok, parser = pcall(vim.treesitter.get_parser, 0, "bash")
+if parser_ok and parser then
+	pcall(require("curl.treesitter").add_treesitter_highlighting)
 	return
 end

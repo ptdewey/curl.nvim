@@ -4,6 +4,7 @@
 Table of Contents                                *curl.nvim-table-of-contents*
 
   - Installation and requirements    |curl.nvim-installation-and-requirements|
+  - Request notebooks                                  |curl.nvim-notebooks|
   - Configuration                                    |curl.nvim-configuration|
   - Features                                              |curl.nvim-features|
   - Lua api                                                |curl.nvim-lua-api|
@@ -111,6 +112,60 @@ possibilites)
 <
 
 To verify the installation run `:checkhealth curl`.
+
+
+REQUEST NOTEBOOKS                                  *curl.nvim-notebooks*
+
+Enable Enter-to-run notebook blocks with:
+>lua
+    require("curl").setup({
+      notebook_mode = true,
+      notebook_shell = { "bash", "--noprofile", "--norc" },
+    })
+<
+:CurlRun always executes a notebook block, regardless of notebook_mode.
+:CurlCancel cancels the request belonging to the current source buffer.
+Lua: require("curl").execute_notebook(), require("curl").cancel_notebook().
+
+Use .curl files. Shared setup precedes the first ### marker. A marker is ### at
+column one followed by whitespace and a title, or end of line. These matching
+lines are reserved even inside quoted bodies and heredocs. Every section must
+be a complete shell fragment. Blank lines do not end a request. A marker selects
+the block it introduces. Setup-only positions, missing markers, and empty or
+comment-only blocks launch no process.
+
+An explicit run snapshots unsaved source, then runs setup and only the selected
+block in one fresh asynchronous shell. Other requests never run to obtain their
+variables. No assignments mutate Neovim's environment or persist between runs.
+A nonzero final setup status stops execution; check intermediate failures yourself
+or choose an appropriate shell option. The plugin does not enable errexit.
+
+The working directory is the request file's directory (Neovim's current directory
+for unnamed buffers). Results show title, directory, status, time, stdout and
+stderr. JSON responses automatically use the json filetype and syntax; metadata
+and stderr remain visually separate. Text and empty responses use plain text.
+JSON is formatted when possible; text and failure output remain visible.
+Include curl --include for headers. HTTP errors can still have exit status zero
+unless you supply --fail or a similar flag. No request options are injected.
+
+One active execution is allowed per source buffer. Cancel or wait before running
+again. Cancellation stops request processes but cannot undo server-side effects.
+Opening, editing, and saving never execute requests. No autosave is required.
+No response history or expanded commands are persisted.
+
+Run only trusted files: setup, substitutions, and sourced code execute too.
+Execution is not a sandbox. No .env is sourced implicitly. Bash runs without
+startup files, including BASH_ENV. An unavailable configured shell is an error;
+there is no silent dialect fallback. Saved literal secrets remain plaintext.
+
+Legacy collections remain the default (notebook_mode = false). The formatting
+and variable sections below describe legacy mode. To migrate, replace ---name=value
+with shell assignments, move setup above the first marker, mark each request,
+and use normal shell quoting and continuations. Single-quoted bodies are literal;
+use an unquoted heredoc or ordinary shell quoting for interpolation.
+Notebook mode ignores default_flags, curl_binary and execute_whole_buffer.
+Choose custom binaries through your shell source or PATH. Collection storage
+is unchanged. See examples/requests.curl in the plugin checkout.
 
 
 CONFIGURATION                                        *curl.nvim-configuration*
