@@ -5,7 +5,7 @@ local T = MiniTest.new_set({
       child.restart({ "-u", "scripts/minimal_init.lua" })
       child.lua([=[
       vim.cmd("syntax enable")
-      require("curl").setup({ notebook_mode = true })
+      require("curl")
       source_buf = vim.api.nvim_get_current_buf()
       function render(stdout, stderr)
         require("curl.buffers").set_notebook_output(source_buf, { title = "response" }, "/tmp", {

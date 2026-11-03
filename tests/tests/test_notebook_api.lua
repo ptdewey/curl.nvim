@@ -4,7 +4,7 @@ local T = new_set({
   hooks = {
     pre_case = function()
       child.restart({ "-u", "scripts/minimal_init.lua" })
-      child.lua([[require("curl").setup({ notebook_mode = true })]])
+      child.lua([[require("curl")]])
     end,
     post_case = function()
       child.stop()
@@ -13,6 +13,67 @@ local T = new_set({
 })
 
 T["notebook API"] = new_set()
+T["notebook API"]["exports only run cancel and setup and runs without setup"] = function()
+  child.lua([[
+    local api = require("curl")
+    local names = {}
+    for key in pairs(api) do names[#names + 1] = key end
+    table.sort(names)
+    _G.public_names = table.concat(names, ",")
+    _G.started_without_setup = 0
+    require("curl.notebook_runner").start = function()
+      _G.started_without_setup = _G.started_without_setup + 1
+      return { cancel = function() end }
+    end
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "### request", "echo ok" })
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    api.run()
+  ]])
+  MiniTest.expect.equality("cancel,run,setup", child.lua_get("_G.public_names"))
+  MiniTest.expect.equality(1, child.lua_get("_G.started_without_setup"))
+end
+
+T["notebook API"]["does not modify existing collection files"] = function()
+  child.lua([[
+    local root = vim.fn.tempname()
+    local cache = vim.fs.joinpath(root, "curl_cache")
+    vim.fn.mkdir(cache, "p")
+    local path = vim.fs.joinpath(cache, "global.curl")
+    vim.fn.writefile({ "### saved", "echo preserved" }, path)
+    local stdpath = vim.fn.stdpath
+    vim.fn.stdpath = function(name)
+      if name == "data" then return root end
+      return stdpath(name)
+    end
+    require("curl").setup()
+    _G.collection_contents = table.concat(vim.fn.readfile(path), "\n")
+    vim.fn.stdpath = stdpath
+    vim.fn.delete(root, "rf")
+  ]])
+  MiniTest.expect.equality("### saved\necho preserved", child.lua_get("_G.collection_contents"))
+end
+
+T["notebook API"]["source wipe cancels execution and cleans response buffer"] = function()
+  child.lua([[
+    local source = vim.api.nvim_get_current_buf()
+    vim.api.nvim_buf_set_lines(source, 0, -1, false, { "### request", "echo ok" })
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    require("curl.buffers").set_notebook_output(source, { title = "request" }, vim.fn.getcwd(), {
+      stdout = "old", stderr = "", exit_code = 0, elapsed = 0,
+    })
+    _G.cancelled = false
+    require("curl.notebook_runner").start = function()
+      return { cancel = function() _G.cancelled = true end }
+    end
+    local output = vim.fn.bufnr("Curl notebook output " .. source)
+    require("curl").run()
+    vim.api.nvim_buf_delete(source, { force = true })
+    _G.output_cleaned = not vim.api.nvim_buf_is_valid(output)
+  ]])
+  MiniTest.expect.equality(true, child.lua_get("_G.cancelled"))
+  MiniTest.expect.equality(true, child.lua_get("_G.output_cleaned"))
+end
+
 T["notebook API"]["executes unsaved selected source and preserves cwd with spaces"] = function()
   child.lua([[
     local runner = require("curl.notebook_runner")
@@ -25,7 +86,7 @@ T["notebook API"]["executes unsaved selected source and preserves cwd with space
     vim.api.nvim_buf_set_name(0, "/tmp/notebook cwd/unsaved.curl")
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { "TOKEN=unsaved", "### chosen", "printf '%s' $TOKEN" })
     vim.api.nvim_win_set_cursor(0, { 3, 0 })
-    require("curl.api").execute_notebook()
+    require("curl").run()
   ]])
   local received = child.lua_get("_G.received")
   MiniTest.expect.equality(received.cwd, "/tmp/notebook cwd")
@@ -34,10 +95,10 @@ T["notebook API"]["executes unsaved selected source and preserves cwd with space
   MiniTest.expect.equality(received.script, "TOKEN=unsaved\nprintf '%s' $TOKEN")
 end
 
-T["notebook API"]["explicit command runs despite notebook mode being disabled and never autosaves"] = function()
+T["notebook API"]["explicit run never autosaves"] = function()
   child.lua([[
     local config = require("curl.config")
-    config.set("notebook_mode", false)
+    config.setup()
     local runner = require("curl.notebook_runner")
     _G.started = 0
     runner.start = function(_, callback)
@@ -47,7 +108,7 @@ T["notebook API"]["explicit command runs despite notebook mode being disabled an
     end
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { "### request", "echo ok" })
     vim.api.nvim_win_set_cursor(0, { 2, 0 })
-    require("curl.api").execute_notebook()
+    require("curl").run()
   ]])
   MiniTest.expect.equality(child.lua_get("_G.started"), 1)
 end
@@ -56,13 +117,14 @@ T["notebook API"]["runs only selected middle block with shared setup in a real s
   child.lua([[
     local dir = vim.fn.tempname() .. " with spaces"
     vim.fn.mkdir(dir, "p")
-    local path = dir .. "/unsaved.curl"
+    local path = dir .. "/unsaved.sh"
     vim.api.nvim_buf_set_name(0, path)
+    vim.bo.filetype = "sh"
     vim.api.nvim_buf_set_lines(0, 0, -1, false, {
       "SHARED=setup", "### first", "printf first", "### middle", "printf '%s:%s' \"$SHARED\" middle", "### last", "printf last",
     })
     vim.api.nvim_win_set_cursor(0, { 5, 0 })
-    require("curl.api").execute_notebook()
+    require("curl").run()
     vim.wait(3000, function()
       local result = vim.fn.bufnr("Curl notebook output " .. vim.api.nvim_get_current_buf())
       return result ~= -1 and vim.api.nvim_buf_line_count(result) > 4
@@ -77,23 +139,6 @@ T["notebook API"]["runs only selected middle block with shared setup in a real s
   MiniTest.expect.no_equality(out:find("setup:middle", 1, true), nil)
   MiniTest.expect.equality(out:find("first", 1, true), nil)
   MiniTest.expect.equality(out:find("last", 1, true), nil)
-end
-
-T["notebook API"]["execute_curl dispatches notebook first when enabled"] = function()
-  child.lua([[
-    require("curl.config").set("notebook_mode", true)
-    local runner = require("curl.notebook_runner")
-    _G.started = 0
-    runner.start = function(_, callback)
-      _G.started = _G.started + 1
-      vim.schedule(function() callback({ stdout = "", stderr = "", exit_code = 0, elapsed = 0, cancelled = false }) end)
-      return { cancel = function() end }
-    end
-    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "### request", "echo ok" })
-    vim.api.nvim_win_set_cursor(0, { 2, 0 })
-    require("curl.api").execute_curl()
-  ]])
-  MiniTest.expect.equality(child.lua_get("_G.started"), 1)
 end
 
 T["notebook API"]["pretty-prints JSON arrays and preserves invalid output and failure streams"] = function()
@@ -124,16 +169,6 @@ T["notebook API"]["pretty-prints JSON arrays and preserves invalid output and fa
   text = table.concat(child.api.nvim_buf_get_lines(result, 0, -1, false), "\n")
   MiniTest.expect.no_equality(text:find("failed before output", 1, true), nil)
   MiniTest.expect.no_equality(text:find("Status: 2", 1, true), nil)
-end
-
-T["notebook API"]["execute_curl retains legacy path unless explicitly enabled"] = function()
-  child.lua([[
-    require("curl.config").set("notebook_mode", false)
-    _G.legacy_called = false
-    require("curl.parser").parse_curl_command = function() _G.legacy_called = true; return "" end
-    require("curl.api").execute_curl()
-  ]])
-  MiniTest.expect.equality(child.lua_get("_G.legacy_called"), true)
 end
 
 return T

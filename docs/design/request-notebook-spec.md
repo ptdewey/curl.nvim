@@ -1,6 +1,9 @@
 # Shell-compatible request notebooks
 
-Status: draft spec for the curl.nvim hard fork. No implementation in this change.
+Status: historical design spec, implemented with later notebook-only simplification.
+The transition-mode and collection-compatibility proposals below are superseded:
+source files are user-managed, any extension works, and `require("curl").run()`
+is the sole run action. See `README.md` for the current API and configuration.
 
 ## Intent
 

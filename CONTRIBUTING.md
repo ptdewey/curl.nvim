@@ -1,70 +1,37 @@
 # Contributing
 
-You are always welcome to fork this project and submit a PR!
+## Scope
 
-Also feel free to create an issue if you would like to discuss a feature beforehand.
+curl.nvim runs a marker-delimited shell notebook block from the current buffer.
+Files belong to the user and their project. The plugin does not manage notebook
+storage, register source filetypes, or provide default keymaps.
 
-## Features
+Preserve shell source rather than adding an interpolation or command-rewriting
+language. Shared setup and the selected block run in one isolated shell; neither
+other blocks nor previous invocations contribute shell state.
 
-One of the philosophies behind curl.nvim is that it's as close to curl as possible.
-Very little should be abstracted a way.
+## Modules
 
-As a rule, any valid curl command in the shell should be able to be pasted in
-to the curl buffer, and be run.
-
-## Bugs
-
-If you fix a bug, please provide a test that reproduces the bug, and that would fail if one
-were to revert your changes. This ensures no regressions, and makes it clear how the bug was caused.
-
-## Project
-
-- api.lua
-  - Lua functions that the user should be able to access
-- buffers.lua
-  - Logic related to opening the correct buffers, and outputting
-    content to the correct buffers
-- cache.lua
-  - Logic related to caching curl commands between sessions
-- config.lua
-  - Things that are configurable goes here
-- init.lua
-  - Setup code that should be run once goes here, such as highlight groups, usercommands and so on
-- notifications.lua
-  - Unified way to show notifications for the user
-- output_parser.lua
-  - Logic for parsing the output from curl commands. Takes care of running jq, and seperating headers and json output
-- parser.lua
-  - See [parser](CONTRIBUTING#Parser)
-
-### Parser
-
-This is where most of the complex logic lives, and takes care
-of the qol features in the scratch buffer.
-
-The parses works on simple text instead of using i.e. treesitter,
-as the legal format of commands in the scratch buffer is not
-valid bash.
-
-The parsing logic aims to be simple rather than complex.
-`format_command_for_curl` removes any trailing forward-slashes and adds missing quotes to json bodies.
-
-Adding missing quotes works by finding the first character of a valid
-json body, either "{" or "[", then uses a stack to keep track of
-nested objects and arrays. When the stack is empty, we know that we
-found the closer of the json body, which we can append a closing
-quote to.
-
-After cleaning up the json body, we look for the curl command
-in the document to execute based on the cursor position.
-First we go upwards until we find either a newline, or
-another curl command.
-We do the same downwards.
-
-The first and last line is the boundary for the curl command.
+- `init.lua`: public `setup`, `run`, and `cancel` API and command registration.
+- `api.lua`: snapshot the source buffer, select the block, and track its execution
+  and cancellation lifecycle. No collection or legacy execution paths.
+- `notebook.lua`: pure source-range extraction using `###` markers.
+- `notebook_runner.lua`: asynchronous shell process, private temporary script,
+  working directory, stream capture, exit status, elapsed time, and cancellation.
+- `buffers.lua`: source-keyed scratch response splits, formatting, and highlighting.
+- `config.lua`: shell argv and response split direction.
+- `notifications.lua`: user-facing notifications.
+- `health.lua`: configured-shell and optional curl availability checks.
 
 ## Tests
 
-Tests can be run like this:
+Run `make test`, or `make test_file FILE=tests/tests/test_notebook.lua` for one file.
+The Makefile downloads mini.nvim on the first run. Tests must use local fixtures
+or fake executables, not public HTTP services or the user's actual config/data.
+Use temporary files and restore mocked functions even when assertions fail.
 
-`make test`
+Keep regression coverage for unsaved source, arbitrary filetypes, setup isolation,
+source fidelity, failure output, process-tree cancellation, overlapping sources,
+and response-buffer reuse. Removing a feature should remove only its own tests,
+not unrelated notebook assertions. Add a reproducer for bug fixes.
+

@@ -1,33 +1,17 @@
-local health = vim.health or require("health")
-local start = health.start or health.report_start
-local ok = health.ok or health.report_ok
-local error = health.error or health.report_error
-
-local required_binaries = {
-	"curl",
-	"jq",
-}
-
-local handle_package = function(found, package)
-	if found then
-		ok(package .. " installed.")
-	else
-		local err_msg = ("%s: not found:"):format(package)
-		error(("%s %s"):format(err_msg, "curl.nvim will not function without this package installed."))
-	end
-end
-
-local check_binary_installed = function(binary)
-	local found = vim.fn.executable(binary) == 1
-	handle_package(found, binary)
-end
-
 local M = {}
 
-M.check = function()
-	start("Checking external dependencies")
-	for _, binary in ipairs(required_binaries) do
-		check_binary_installed(binary)
+function M.check()
+	vim.health.start("Notebook execution")
+	local shell = require("curl.config").get("shell")[1]
+	if vim.fn.executable(shell) == 1 then
+		vim.health.ok("Configured shell available: " .. shell)
+	else
+		vim.health.error("Configured shell not found: " .. shell)
+	end
+	if vim.fn.executable("curl") == 1 then
+		vim.health.ok("curl available on the editor's PATH")
+	else
+		vim.health.warn("curl not found on the editor's PATH; provide it in notebook setup if requests use it")
 	end
 end
 

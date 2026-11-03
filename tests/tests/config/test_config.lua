@@ -1,141 +1,62 @@
-local new_set = MiniTest.new_set
-
-local curl = require("curl")
-local config = require("curl.config")
-local test_util = require("tests.testing_util")
-local api = require("curl.api")
-
 local child = MiniTest.new_child_neovim()
-local T = new_set({
+local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
-      -- Restart child process with custom 'init.lua' script
       child.restart({ "-u", "scripts/minimal_init.lua" })
-      -- Load tested plugin
-      child.lua([[M = require('curl').setup({ open_with = "split"})]])
+      child.lua([[curl = require("curl")]])
     end,
-    after_case = function()
-      api.close_curl_tab(true)
+    post_case = function()
+      child.stop()
     end,
   },
 })
 
-local function test_split(open_func)
-  local tabpages_before = #child.api.nvim_list_tabpages()
-  child.lua(open_func)
-  local tabpages_after = #child.api.nvim_list_tabpages()
-
-  test_util.assert_equals(tabpages_before, tabpages_after, "No new tab should be opened")
-
-  local buf_name = child.api.nvim_buf_get_name(0)
-  local is_curl_file = buf_name:match("%.curl$") ~= nil
-  test_util.assert_equals(is_curl_file, true, "Should open a curl file")
-
-  local windows_open = #child.api.nvim_tabpage_list_wins(0)
-  test_util.assert_equals(windows_open, 2, "Should split window in 2")
-end
-T["Config"] = new_set()
-T["Config"]["Split when using collection scoped"] = function()
-  test_split("require('curl').open_curl_tab()")
+T["Config"] = MiniTest.new_set()
+T["Config"]["setup resets defaults and replaces shell argv"] = function()
+  child.lua([[curl.setup({ shell = { "bash", "--custom", "--flag" }, output_split_direction = "horizontal" })]])
+  child.lua([[curl.setup({ shell = { "sh", "-eu" } })]])
+  MiniTest.expect.equality({ "sh", "-eu" }, child.lua_get([[require("curl.config").get("shell")]]))
+  MiniTest.expect.equality("vertical", child.lua_get([[require("curl.config").get("output_split_direction")]]))
+  child.lua([[curl.setup()]])
+  MiniTest.expect.equality({ "bash", "--noprofile", "--norc" }, child.lua_get([[require("curl.config").get("shell")]]))
 end
 
-T["Config"]["Split when using global scoped"] = function()
-  test_split([[require("curl").open_global_tab()]])
+T["Config"]["commands invoke run and cancel for current source"] = function()
+  child.lua([[curl.setup()]])
+  child.lua([[
+    _G.calls = 0
+    require("curl.notebook_runner").start = function(_, callback)
+      _G.calls = _G.calls + 1
+      return { cancel = function() _G.cancelled = true end }
+    end
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "### request", "echo ok" })
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    vim.cmd("CurlRun")
+    vim.cmd("CurlCancel")
+  ]])
+  MiniTest.expect.equality(1, child.lua_get("_G.calls"))
+  MiniTest.expect.equality(true, child.lua_get("_G.cancelled"))
 end
 
-T["Config"]["Split when using global collection"] = function()
-  test_split([[require("curl").open_global_collection("foo")]])
+T["Config"]["rejects removed configuration"] = function()
+  MiniTest.expect.equality(true, child.lua_get([[not pcall(curl.setup, { notebook_mode = true })]]))
 end
 
-T["Config"]["Split when using scoped collection"] = function()
-  test_split([[require("curl").open_scoped_collection("bar")]])
+T["Config"]["rejects false and sparse configuration values"] = function()
+  MiniTest.expect.equality(true, child.lua_get([[not pcall(curl.setup, false)]]))
+  MiniTest.expect.equality(true, child.lua_get([[not pcall(curl.setup, { shell = false })]]))
+  MiniTest.expect.equality(true, child.lua_get([[not pcall(curl.setup, { output_split_direction = false })]]))
+  MiniTest.expect.equality(true, child.lua_get([[not pcall(curl.setup, { shell = { [1] = "bash", [3] = "-eu" } })]]))
 end
 
-T["Config"]["has default mapping"] = function()
-  local default_mapping = config.get("mappings")["execute_curl"]
-
-  test_util.assert_equals("<CR>", default_mapping)
+T["Config"]["rejects unknown config lookup"] = function()
+  MiniTest.expect.equality(true, child.lua_get([[require("curl.config").get("notebook_mode") == nil]]))
 end
 
-T["Config"]["can set curl keymap"] = function()
-  curl.setup({ mappings = { execute_curl = "<C-r>" } })
-
-  local curl_mapping = config.get("mappings")["execute_curl"]
-
-  test_util.assert_equals("<C-r>", curl_mapping)
-  curl.setup({})
-end
-
-T["Config"]["can set default flags"] = function()
-  child.lua([[require("curl").setup({ default_flags = { "-i" } })]])
-
-  -- stylua: ignore
-  local mocked_jobstart = function(command, _)
-    MiniTest.expect.equality("curl localhost:8000" .. " -sSL -i" , command[#command])
-  end
-  local mock_pre = child.fn.jobstart
-  child.fn.jobstart = mocked_jobstart
-
-  child.lua([[require("curl").open_curl_tab()]])
-  local curl_command = "curl localhost:8000"
-  child.api.nvim_buf_set_lines(0, 0, -1, false, { curl_command })
-  child.lua([[require("curl").execute_curl()]])
-  child.fn.jobstart = mock_pre
-  curl.setup({})
-end
-
-T["Config"]["can set alternative curl alias from config"] = function()
-  child.lua([[require("curl").setup({ curl_binary = "/my/cool/curl" })]])
-
-  local curl_command = "curl localhost:8000"
-
-  -- stylua: ignore
-  local mocked_jobstart = function(command, _)
-    MiniTest.expect.equality("/my/cool/curl" .. " localhost:8000 -sSL", command[#command])
-  end
-  local mock_pre = child.fn.jobstart
-  child.fn.jobstart = mocked_jobstart
-
-  child.lua([[require("curl").open_curl_tab()]])
-  child.api.nvim_buf_set_lines(0, 0, -1, false, { curl_command })
-  child.lua([[require("curl").execute_curl()]])
-  child.fn.jobstart = mock_pre
-end
-
-T["Config"]["can set alternative curl alias in runtime"] = function()
-  child.lua([[require("curl").set_curl_binary("/my/cool/curl")]])
-
-  local curl_command = "curl localhost:8000"
-
-   -- stylua: ignore
-  local mocked_jobstart = function(command, _)
-    MiniTest.expect.equality("/my/cool/curl" .. " localhost:8000 -sSL", command[#command])
-  end
-  local mock_pre = child.fn.jobstart
-  child.fn.jobstart = mocked_jobstart
-
-  child.lua([[require("curl").open_curl_tab()]])
-  child.api.nvim_buf_set_lines(0, 0, -1, false, { curl_command })
-  child.lua([[require("curl").execute_curl()]])
-  child.fn.jobstart = mock_pre
-end
-
-T["Config"]["can set output split direction to horizontal"] = function()
-  -- Override the pre_case setup with our specific config
-  child.lua([[require("curl").setup({ output_split_direction = "horizontal" })]])
-
-  local output_split_direction = child.lua_get([[require("curl.config").get("output_split_direction")]])
-
-  test_util.assert_equals("horizontal", output_split_direction)
-end
-
-T["Config"]["default output split direction is vertical"] = function()
-  -- Override the pre_case setup with default config
-  child.lua([[require("curl").setup({})]])
-
-  local output_split_direction = child.lua_get([[require("curl.config").get("output_split_direction")]])
-
-  test_util.assert_equals("vertical", output_split_direction)
+T["Config"]["setup registers explicit commands only"] = function()
+  child.lua([[curl.setup()]])
+  MiniTest.expect.equality(true, child.lua_get([[vim.api.nvim_get_commands({}).CurlRun ~= nil]]))
+  MiniTest.expect.equality(true, child.lua_get([[vim.api.nvim_get_commands({}).CurlCancel ~= nil]]))
 end
 
 return T

@@ -12,7 +12,7 @@ T["documented notebook reaches fake curl unchanged"] = function()
     "cat",
   }, fake)
   vim.uv.fs_chmod(fake, 448)
-  local lines = vim.fn.readfile("examples/requests.curl")
+  local lines = vim.fn.readfile("examples/requests.sh")
   table.insert(lines, 1, "PATH=" .. vim.fn.shellescape(root) .. ":$PATH")
   local selected = assert(notebook.extract(lines, #lines))
   local result

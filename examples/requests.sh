@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+# Use :CurlRun to execute one block; running this file directly executes every request.
+
 ENV=local
 case "$ENV" in
   local) APPLICATIONS_URL=http://localhost:8099/api/v1/applications ;;

@@ -1,43 +1,53 @@
----@class curl_config
-local default_config = {
-	---@type table<string>
-	default_flags = {},
-	---@type integer | nil
-	show_request_duration_limit = nil, -- show elapsed time if request duration exceeds this limit; don't show if nil
-	---@type string
-	curl_binary = nil,
-	---@type "tab"|"split"|"vsplit"|"buffer"
-	open_with = "tab", -- tab or (v)split or buffer
-	---@type "vertical"|"horizontal"
-	output_split_direction = "vertical", -- how to split the output buffer
-	notebook_mode = false,
-	notebook_shell = { "bash", "--noprofile", "--norc" },
-	---@type table<'execute_curl', string>
-	mappings = {
-		execute_curl = "<CR>",
-	},
+local defaults = {
+  shell = { "bash", "--noprofile", "--norc" },
+  output_split_direction = "vertical",
 }
 
-local mod = {
-	config = default_config,
-}
+local mod = { config = vim.deepcopy(defaults) }
 
 function mod.setup(opts)
-	mod.config = vim.tbl_deep_extend("force", default_config, opts or {})
-	return mod.config
+  if opts == nil then
+    opts = {}
+  end
+  if type(opts) ~= "table" then
+    error("curl.setup options must be a table")
+  end
+  for key in pairs(opts) do
+    if key ~= "shell" and key ~= "output_split_direction" then
+      error("unknown curl option: " .. tostring(key))
+    end
+  end
+  local shell = opts.shell
+  if shell == nil then
+    shell = defaults.shell
+  end
+  if type(shell) ~= "table" or not vim.islist(shell) or #shell == 0 then
+    error("shell must be a non-empty argv table")
+  end
+  for _, arg in ipairs(shell) do
+    if type(arg) ~= "string" or arg == "" then
+      error("shell arguments must be non-empty strings")
+    end
+  end
+  local direction = opts.output_split_direction
+  if direction == nil then
+    direction = defaults.output_split_direction
+  end
+  if direction ~= "vertical" and direction ~= "horizontal" then
+    error("output_split_direction must be vertical or horizontal")
+  end
+  mod.config = {
+    shell = vim.deepcopy(shell),
+    output_split_direction = direction,
+  }
+  return mod.config
 end
 
----@param key? string
 function mod.get(key)
-	if key then
-		return mod.config[key]
-	end
-
-	return mod.config
-end
-
-function mod.set(key, value)
-	mod.config[key] = value
+  if key ~= nil then
+    return mod.config[key]
+  end
+  return mod.config
 end
 
 return mod
