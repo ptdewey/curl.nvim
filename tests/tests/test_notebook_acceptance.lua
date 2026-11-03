@@ -12,15 +12,15 @@ local T = MiniTest.new_set({
         vim.api.nvim_win_set_cursor(0, { cursor or #lines, 0 })
         return buf
       end
-      function result(buf)
-        local output = vim.fn.bufnr("Curl notebook output " .. buf)
+      function result()
+        local output = vim.fn.bufnr("Curl notebook output")
         return output ~= -1 and table.concat(vim.api.nvim_buf_get_lines(output, 0, -1, false), "\n") or nil
       end
-      function execute(buf)
-        local before = result(buf)
+      function execute()
+        local before = result()
         require("curl").run()
-        assert(vim.wait(5000, function() return result(buf) and result(buf) ~= before end, 10), "no new result")
-        return result(buf)
+        assert(vim.wait(5000, function() return result() and result() ~= before end, 10), "no new result")
+        return result()
       end
     ]=])
     end,
@@ -38,19 +38,19 @@ T["unsaved environment selection and local assignments stay isolated on success 
       "### middle", "VALUE=local_override", [[printf '%s:%s:%s\n' "$ENV" "$VALUE" "${OTHER-unset}"]],
       "### last", "printf wrong",
     }, 5)
-    local out = execute(buf)
+    local out = execute()
     assert(out:find("local:local_override:unset", 1, true), out)
     assert(not out:find("wrong", 1, true), out)
     vim.api.nvim_buf_set_lines(buf, 0, 1, false, { "ENV=dev" })
     vim.api.nvim_win_set_cursor(0, { 7, 0 })
-    out = execute(buf)
+    out = execute()
     assert(out:find("dev:local_override:unset", 1, true), out)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
       "NOTEBOOK_TEST_TOKEN=failed", [[printf 'before\nfailure\n']], [[printf 'setup\nerror\n' >&2]], "(exit 7)",
       "### stopped", "printf MUST_NOT_RUN",
     })
     vim.api.nvim_win_set_cursor(0, { 5, 0 })
-    out = execute(buf)
+    out = execute()
     assert(out:find("Status: 7", 1, true), out)
     assert(out:find("before\nfailure\n", 1, true), out)
     assert(out:find("setup\nerror\n", 1, true), out)
@@ -58,12 +58,12 @@ T["unsaved environment selection and local assignments stay isolated on success 
     assert(vim.deep_equal(env, vim.fn.environ()), "editor environment changed")
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "### fresh", [[printf '%s' "${NOTEBOOK_TEST_TOKEN-unset}"]] })
     vim.api.nvim_win_set_cursor(0, { 2, 0 })
-    out = execute(buf)
+    out = execute()
     assert(out:find("stdout:\nunset", 1, true), out)
   ]=])
 end
 
-T["overlap rejected and separate sources retain their own results after cancellation"] = function()
+T["overlap rejected and concurrent sources share the most recently finished result"] = function()
   child.lua([=[
     local errors = {}
     require("curl.notifications").error = function(message) errors[#errors + 1] = message end
@@ -71,14 +71,44 @@ T["overlap rejected and separate sources retain their own results after cancella
     require("curl").run()
     require("curl").run()
     assert(#errors == 1 and errors[1]:find("already running"), vim.inspect(errors))
-    local second = source({ "### other", "printf independent" })
-    local out = execute(second)
+    source({ "### other", "printf independent" })
+    local out = execute()
     assert(out:find("independent", 1, true), out)
+    local output = vim.fn.bufnr("Curl notebook output")
+    local output_win = vim.fn.win_findbuf(output)[1]
     require("curl").cancel(first)
-    assert(vim.wait(5000, function() return result(first) ~= nil end, 10))
-    assert(result(first):find("Status: cancelled", 1, true), result(first))
-    assert(not result(first):find("finished", 1, true), result(first))
-    assert(result(second) == out, "another source result overwritten")
+    assert(vim.wait(5000, function() return result():find("Status: cancelled", 1, true) ~= nil end, 10))
+    assert(not result():find("finished", 1, true), result())
+    assert(vim.fn.bufnr("Curl notebook output") == output)
+    assert(vim.deep_equal(vim.fn.win_findbuf(output), { output_win }))
+  ]=])
+end
+
+T["switching scripts reuses the shared output buffer and split"] = function()
+  child.lua([=[
+    local first = source({ "### first", [[printf '{"first":true}']] })
+    execute()
+    local output = vim.fn.bufnr("Curl notebook output")
+    local output_win = vim.fn.win_findbuf(output)[1]
+    local source_win = vim.api.nvim_get_current_win()
+    local windows = #vim.api.nvim_list_wins()
+    local second = source({ "### second", "printf second_result" })
+    local out = execute()
+    assert(out:find("Request: second", 1, true), out)
+    assert(out:find("stdout:\nsecond_result", 1, true), out)
+    assert(not out:find('"first"', 1, true), out)
+    assert(vim.fn.bufnr("Curl notebook output") == output)
+    assert(vim.deep_equal(vim.fn.win_findbuf(output), { output_win }))
+    assert(#vim.api.nvim_list_wins() == windows)
+    assert(vim.api.nvim_get_current_win() == source_win)
+    assert(vim.api.nvim_get_current_buf() == second)
+    assert(vim.bo[output].filetype == "text")
+    assert(not vim.wo[output_win].spell)
+    vim.api.nvim_buf_delete(first, { force = true })
+    vim.api.nvim_buf_delete(second, { force = true })
+    assert(vim.api.nvim_buf_is_valid(output))
+    assert(vim.api.nvim_win_is_valid(output_win))
+    assert(result() == out)
   ]=])
 end
 
@@ -115,7 +145,7 @@ T["relative input files resolve from an unsaved named source directory"] = funct
     vim.fn.writefile({ "relative body" }, root .. "/body.txt")
     local buf = source({ "### relative", "cat body.txt; pwd" })
     vim.api.nvim_buf_set_name(buf, root .. "/unsaved.curl")
-    local out = execute(buf)
+    local out = execute()
     assert(out:find("relative body\n" .. root, 1, true), out)
     assert(vim.fn.filereadable(root .. "/unsaved.curl") == 0, "source autosaved")
     vim.fn.delete(root, "rf")

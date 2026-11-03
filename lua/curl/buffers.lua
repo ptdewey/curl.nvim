@@ -1,6 +1,6 @@
 local M = {}
 
-local notebook_outputs = {}
+local notebook_output
 
 local function pretty_json(text)
 	local ok = pcall(vim.json.decode, text)
@@ -75,11 +75,11 @@ local function set_notebook_syntax(buf, is_json, stderr_start)
 end
 
 M.set_notebook_output = function(source_buf, extracted, cwd, result)
-	local buf = notebook_outputs[source_buf]
+	local buf = notebook_output
 	if not buf or not vim.api.nvim_buf_is_valid(buf) then
 		buf = vim.api.nvim_create_buf(false, true)
-		notebook_outputs[source_buf] = buf
-		vim.api.nvim_buf_set_name(buf, "Curl notebook output " .. source_buf)
+		notebook_output = buf
+		vim.api.nvim_buf_set_name(buf, "Curl notebook output")
 		vim.api.nvim_set_option_value("buftype", "nofile", { buf = buf })
 		vim.api.nvim_set_option_value("bufhidden", "hide", { buf = buf })
 	end
@@ -110,8 +110,11 @@ M.set_notebook_output = function(source_buf, extracted, cwd, result)
 	local result_windows = vim.fn.win_findbuf(buf)
 	for _, win in ipairs(result_windows) do
 		if vim.api.nvim_win_is_valid(win) then
-			return
+			vim.api.nvim_set_option_value("spell", false, { win = win })
 		end
+	end
+	if #result_windows > 0 then
+		return
 	end
 	local current_win = vim.api.nvim_get_current_win()
 	local source_windows = vim.fn.win_findbuf(source_buf)
@@ -126,25 +129,10 @@ M.set_notebook_output = function(source_buf, extracted, cwd, result)
 		local direction = require("curl.config").get("output_split_direction")
 		vim.cmd(direction == "vertical" and "belowright vsplit" or "belowright split")
 		vim.api.nvim_win_set_buf(0, buf)
+		vim.api.nvim_set_option_value("spell", false, { win = 0 })
 	end)
 	if vim.api.nvim_win_is_valid(current_win) then
 		vim.api.nvim_set_current_win(current_win)
-	end
-end
-
-M.cleanup_notebook_output = function(source_buf)
-	local buf = notebook_outputs[source_buf]
-	notebook_outputs[source_buf] = nil
-	if not buf or not vim.api.nvim_buf_is_valid(buf) then
-		return
-	end
-	for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-		if vim.api.nvim_win_is_valid(win) then
-			pcall(vim.api.nvim_win_close, win, true)
-		end
-	end
-	if vim.api.nvim_buf_is_valid(buf) then
-		pcall(vim.api.nvim_buf_delete, buf, { force = true })
 	end
 end
 

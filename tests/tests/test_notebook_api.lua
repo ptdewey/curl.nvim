@@ -13,6 +13,81 @@ local T = new_set({
 })
 
 T["notebook API"] = new_set()
+T["notebook API"]["clears running feedback and only reports cancellation or failure"] = function()
+  child.lua([[
+    _G.messages = {}
+    vim.notify = function(message, level, opts)
+      table.insert(_G.messages, { message = message, level = level, timeout = opts.timeout })
+    end
+    require("curl.notifications").running = function(title)
+      _G.progress = { title = title, active = true }
+      return function() _G.progress.active = false end
+    end
+    require("curl.notebook_runner").start = function(_, callback)
+      _G.finish_request = callback
+      return { cancel = function() end }
+    end
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "### example", "echo ok" })
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+  ]])
+  for _, outcome in ipairs({
+    { code = 0, cancelled = false },
+    { code = 7, cancelled = false, message = "Request failed (exit 7): example", level = "ERROR" },
+    { code = 143, cancelled = true, message = "Request cancelled: example", level = "INFO" },
+  }) do
+    child.lua([[_G.messages = {}; require("curl").run()]])
+    MiniTest.expect.equality(child.lua_get("_G.progress"), { title = "example", active = true })
+    child.lua([[
+      _G.finish_request({ stdout = "", stderr = "", exit_code = ..., cancelled = select(2, ...) })
+    ]], { outcome.code, outcome.cancelled })
+    MiniTest.expect.equality(child.lua_get("_G.progress.active"), false)
+    if outcome.message then
+      MiniTest.expect.equality(child.lua_get("_G.messages[#_G.messages].message"), outcome.message)
+      MiniTest.expect.equality(child.lua_get("_G.messages[#_G.messages].level == vim.log.levels." .. outcome.level), true)
+    else
+      MiniTest.expect.equality(child.lua_get("_G.messages"), {})
+    end
+  end
+end
+
+T["notebook API"]["does not announce running when the shell fails to start"] = function()
+  child.lua([[
+    _G.messages = {}
+    vim.notify = function(message) table.insert(_G.messages, message) end
+    require("curl.notebook_runner").start = function() return nil, "shell unavailable" end
+    require("curl.notifications").running = function() error("unexpected progress") end
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "### example", "echo ok" })
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    require("curl").run()
+  ]])
+  MiniTest.expect.equality(child.lua_get("_G.messages"), { "shell unavailable" })
+end
+
+T["notebook API"]["updates elapsed seconds during a real request and clears silently on success"] = function()
+  child.lua([[
+    local messages, progress = {}, {}
+    vim.notify = function(message) messages[#messages + 1] = message end
+    vim.api.nvim_echo = function(chunks) progress[#progress + 1] = chunks[1][1] end
+    local source = vim.api.nvim_get_current_buf()
+    vim.api.nvim_buf_set_lines(source, 0, -1, false, { "### slow", "sleep 1.2; printf done" })
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    require("curl").run()
+    assert(vim.wait(5000, function()
+      return vim.fn.bufnr("Curl notebook output") ~= -1
+    end, 10), "request did not finish")
+    local counted_seconds = false
+    for _, message in ipairs(progress) do
+      counted_seconds = counted_seconds or message:find("slow (1s)", 1, true) ~= nil
+    end
+    assert(counted_seconds, vim.inspect(progress))
+    assert(progress[#progress] == "")
+    assert(#messages == 0, vim.inspect(messages))
+    local count = #progress
+    vim.wait(150)
+    assert(#progress == count, "progress continued after completion")
+  ]])
+end
+
 T["notebook API"]["exports only run cancel and setup and runs without setup"] = function()
   child.lua([[
     local api = require("curl")
@@ -53,7 +128,7 @@ T["notebook API"]["does not modify existing collection files"] = function()
   MiniTest.expect.equality("### saved\necho preserved", child.lua_get("_G.collection_contents"))
 end
 
-T["notebook API"]["source wipe cancels execution and cleans response buffer"] = function()
+T["notebook API"]["source wipe cancels execution but preserves the shared response"] = function()
   child.lua([[
     local source = vim.api.nvim_get_current_buf()
     vim.api.nvim_buf_set_lines(source, 0, -1, false, { "### request", "echo ok" })
@@ -62,16 +137,24 @@ T["notebook API"]["source wipe cancels execution and cleans response buffer"] = 
       stdout = "old", stderr = "", exit_code = 0, elapsed = 0,
     })
     _G.cancelled = false
-    require("curl.notebook_runner").start = function()
+    _G.progress_stopped = false
+    require("curl.notifications").running = function()
+      return function() _G.progress_stopped = true end
+    end
+    require("curl.notebook_runner").start = function(_, callback)
+      _G.finish_request = callback
       return { cancel = function() _G.cancelled = true end }
     end
-    local output = vim.fn.bufnr("Curl notebook output " .. source)
+    local output = vim.fn.bufnr("Curl notebook output")
     require("curl").run()
     vim.api.nvim_buf_delete(source, { force = true })
-    _G.output_cleaned = not vim.api.nvim_buf_is_valid(output)
+    _G.finish_request({ stdout = "cancelled output", exit_code = 143, cancelled = true })
+    _G.output_preserved = vim.api.nvim_buf_is_valid(output)
+      and table.concat(vim.api.nvim_buf_get_lines(output, 0, -1, false), "\n"):find("stdout:\nold", 1, true) ~= nil
   ]])
   MiniTest.expect.equality(true, child.lua_get("_G.cancelled"))
-  MiniTest.expect.equality(true, child.lua_get("_G.output_cleaned"))
+  MiniTest.expect.equality(true, child.lua_get("_G.progress_stopped"))
+  MiniTest.expect.equality(true, child.lua_get("_G.output_preserved"))
 end
 
 T["notebook API"]["executes unsaved selected source and preserves cwd with spaces"] = function()
@@ -126,13 +209,12 @@ T["notebook API"]["runs only selected middle block with shared setup in a real s
     vim.api.nvim_win_set_cursor(0, { 5, 0 })
     require("curl").run()
     vim.wait(3000, function()
-      local result = vim.fn.bufnr("Curl notebook output " .. vim.api.nvim_get_current_buf())
+      local result = vim.fn.bufnr("Curl notebook output")
       return result ~= -1 and vim.api.nvim_buf_line_count(result) > 4
     end)
   ]])
   local out = child.lua([[
-    local source = vim.api.nvim_get_current_buf()
-    local result = vim.fn.bufnr("Curl notebook output " .. source)
+    local result = vim.fn.bufnr("Curl notebook output")
     local lines = vim.api.nvim_buf_get_lines(result, 0, -1, false)
     return table.concat(lines, "\n")
   ]])
@@ -148,8 +230,7 @@ T["notebook API"]["pretty-prints JSON arrays and preserves invalid output and fa
       stdout = "[1,{\"ok\":true}]", stderr = "request warning", exit_code = 7, elapsed = 0.5,
     })
   ]])
-  local source = child.api.nvim_get_current_buf()
-  local result = child.fn.bufnr("Curl notebook output " .. source)
+  local result = child.fn.bufnr("Curl notebook output")
   local text = table.concat(child.api.nvim_buf_get_lines(result, 0, -1, false), "\n")
   MiniTest.expect.no_equality(text:find("  {", 1, true), nil)
   MiniTest.expect.no_equality(text:find("request warning", 1, true), nil)

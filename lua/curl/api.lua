@@ -10,12 +10,12 @@ local notebook_runs = {}
 
 vim.api.nvim_create_autocmd("BufWipeout", {
   callback = function(event)
-    local handle = notebook_runs[event.buf]
-    if handle then
-      handle.cancel()
+    local run = notebook_runs[event.buf]
+    if run then
+      run.stop_progress()
+      run.handle.cancel()
       notebook_runs[event.buf] = nil
     end
-    buffers.cleanup_notebook_output(event.buf)
   end,
 })
 
@@ -34,6 +34,8 @@ function M.run()
   end
   local filename = vim.api.nvim_buf_get_name(bufnr)
   local cwd = filename ~= "" and vim.fn.fnamemodify(filename, ":p:h") or vim.fn.getcwd()
+  local title = extracted.title ~= "" and extracted.title or "(untitled)"
+  local stop_progress
   local handle, start_error = notebook_runner.start({
     script = extracted.script,
     setup = extracted.setup,
@@ -41,28 +43,37 @@ function M.run()
     cwd = cwd,
     shell = vim.deepcopy(config.get("shell")),
   }, function(result)
+    if stop_progress then
+      stop_progress()
+    end
     notebook_runs[bufnr] = nil
     if not vim.api.nvim_buf_is_valid(bufnr) then
       return
     end
     buffers.set_notebook_output(bufnr, extracted, cwd, result)
+    if result.cancelled then
+      notify.info("Request cancelled: " .. title)
+    elseif result.exit_code ~= 0 then
+      notify.error(string.format("Request failed (exit %s): %s", result.exit_code, title))
+    end
   end)
   if not handle then
     notify.error(start_error or "Unable to start notebook shell")
     return
   end
-  notebook_runs[bufnr] = handle
+  stop_progress = notify.running(title)
+  notebook_runs[bufnr] = { handle = handle, stop_progress = stop_progress }
   return handle
 end
 
 function M.cancel(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local handle = notebook_runs[bufnr]
-  if not handle then
+  local run = notebook_runs[bufnr]
+  if not run then
     notify.error("No notebook request is running for this buffer")
     return
   end
-  handle.cancel()
+  run.handle.cancel()
 end
 
 return M

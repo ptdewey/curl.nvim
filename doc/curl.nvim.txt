@@ -92,9 +92,10 @@ not a reason to fall back to another dialect. Unknown options are rejected.
 
 RESULTS                                                    *curl.nvim-results*
 
-Each source buffer reuses a scratch split with request title, working directory,
-process exit status, elapsed time, stdout, and stderr. Failure preserves both
-streams. JSON gets pretty-printing and JSON highlighting, with metadata and stderr
+All scripts share one scratch response buffer and reuse its split. Each finished
+request replaces the displayed result with its title, working directory, process
+exit status, elapsed time, stdout, and stderr. Failure preserves both streams.
+JSON gets pretty-printing and JSON highlighting, with metadata and stderr
 highlighted separately. Text, invalid JSON and empty responses remain visible.
 
 Use curl --include for headers. HTTP error responses may have process status zero
@@ -102,8 +103,8 @@ unless the command uses --fail or a related flag. Shell source selects curl
 binaries and flags; the plugin does not rewrite commands.
 
 Only one run is allowed per source buffer. Cancel or wait before running again.
-Different source buffers have independent results. Wiping a source cancels its
-execution and removes its response buffer. No response history is persisted.
+Wiping a source cancels its execution but leaves the shared response buffer
+intact. No response history is persisted.
 
 SAFETY                                                     *curl.nvim-safety*
 

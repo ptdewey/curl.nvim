@@ -88,9 +88,10 @@ plugin's run action selects only one block.
 
 ## Results and cancellation
 
-Each source buffer reuses its own scratch response split. Results show the request
-title, working directory, process exit status, elapsed time, stdout, and stderr.
-Both streams remain available after failure. JSON is pretty-printed and receives
+All scripts share one scratch response buffer and reuse its split. Each finished
+request replaces the displayed result with its title, working directory, process
+exit status, elapsed time, stdout, and stderr. Both streams remain available after
+failure. JSON is pretty-printed and receives
 automatic JSON highlighting; metadata and stderr have separate highlighting.
 Other text, invalid JSON, and empty responses remain inspectable.
 
@@ -103,8 +104,8 @@ One execution may run per source buffer. Cancel or wait before starting another.
 `require("curl").cancel()` cancels the current source's request; pass a source
 buffer number to cancel another. `:CurlCancel` is the current-buffer equivalent.
 Cancellation terminates the shell and its request children but cannot undo
-server-side effects. Wiping a source buffer cancels its active run and removes
-its response buffer.
+server-side effects. Wiping a source buffer cancels its active run but leaves
+the shared response buffer intact.
 
 ## Configuration
 
