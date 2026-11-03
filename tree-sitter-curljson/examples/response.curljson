@@ -1,0 +1,13 @@
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+{
+  "message": "Hello from curl.nvim",
+  "tags": ["curl", "neovim"]
+}
+
+stderr:
+warning: example diagnostic

@@ -1,0 +1,22 @@
+{
+  "grammars": [
+    {
+      "name": "curljson",
+      "camelcase": "Curljson",
+      "scope": "source.curljson",
+      "path": ".",
+      "file-types": [
+        "curljson"
+      ],
+      "highlights": "queries/highlights.scm",
+      "injections": "queries/injections.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "description": "curl.nvim response metadata with JSON-injected stdout"
+  },
+  "bindings": {
+    "c": true
+  }
+}

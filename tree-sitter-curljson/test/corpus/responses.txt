@@ -1,0 +1,260 @@
+==================
+JSON response
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+{
+  "ok": true,
+  "data": {"message": "hello"}
+}
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body)))
+
+==================
+JSON response and stderr
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+{"ok": true}
+
+stderr:
+warning: retrying
+second warning
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body))
+  (stderr
+    (stderr_header)
+    body: (stderr_body)))
+
+==================
+Plain text including metadata-like lines
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+Request: just body text
+Status: not metadata
+stdout:
+stderr: not a delimiter
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body)))
+
+==================
+Empty stdout
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)))
+
+==================
+Stderr-only failure
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 7
+Elapsed: 0.139s
+
+stdout:
+
+stderr:
+connection refused
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body))
+  (stderr
+    (stderr_header)
+    body: (stderr_body)))
+
+==================
+Cancelled request
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: cancelled
+Elapsed: 0.139s
+
+stdout:
+partial output
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (cancelled))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body)))
+
+==================
+CRLF output
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+{"ok": true}
+
+stderr:
+warning
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body))
+  (stderr
+    (stderr_header)
+    body: (stderr_body)))
+
+==================
+Reserved stderr marker splits stdout
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+first line
+stderr:
+rest is stderr
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body))
+  (stderr
+    (stderr_header)
+    body: (stderr_body)))
+
+==================
+JSON-looking malformed output
+==================
+Request: POST literal multiline JSON
+Directory: /home/patrick/project with spaces
+Status: 0
+Elapsed: 0.139s
+
+stdout:
+{"not complete":
+
+---
+
+(document
+  (request
+    title: (request_title))
+  (directory
+    path: (directory_path))
+  (status
+    value: (exit_code))
+  (elapsed
+    duration: (duration))
+  (stdout
+    (stdout_header)
+    body: (stdout_body)))

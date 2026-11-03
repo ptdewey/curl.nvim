@@ -1,0 +1,228 @@
+[
+  {
+    "type": "directory",
+    "named": true,
+    "fields": {
+      "path": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "directory_path",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "directory_path",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "document",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "directory",
+          "named": true
+        },
+        {
+          "type": "elapsed",
+          "named": true
+        },
+        {
+          "type": "request",
+          "named": true
+        },
+        {
+          "type": "status",
+          "named": true
+        },
+        {
+          "type": "stderr",
+          "named": true
+        },
+        {
+          "type": "stdout",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "duration",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "elapsed",
+    "named": true,
+    "fields": {
+      "duration": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "duration",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "request",
+    "named": true,
+    "fields": {
+      "title": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "request_title",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "request_title",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "status",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "cancelled",
+            "named": true
+          },
+          {
+            "type": "exit_code",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "stderr",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "stderr_body",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "stderr_header",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "stderr_body",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "stdout",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "stdout_body",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "stdout_header",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "stdout_body",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "stdout_header",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": " ",
+    "named": false
+  },
+  {
+    "type": "Directory:",
+    "named": false
+  },
+  {
+    "type": "Elapsed:",
+    "named": false
+  },
+  {
+    "type": "Request:",
+    "named": false
+  },
+  {
+    "type": "Status:",
+    "named": false
+  },
+  {
+    "type": "cancelled",
+    "named": true
+  },
+  {
+    "type": "exit_code",
+    "named": true
+  },
+  {
+    "type": "s",
+    "named": false
+  },
+  {
+    "type": "stderr_header",
+    "named": true
+  },
+  {
+    "type": "stdout:",
+    "named": false
+  }
+]

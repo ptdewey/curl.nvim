@@ -1,0 +1,15 @@
+{
+  "name": "tree-sitter-curljson",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tree-sitter grammar for curl.nvim response buffers",
+  "main": "grammar.js",
+  "scripts": {
+    "generate": "tree-sitter generate --abi 14",
+    "test": "tree-sitter test",
+    "test:neovim": "nvim --headless -u NONE -l test/neovim.lua"
+  },
+  "devDependencies": {
+    "tree-sitter-json": "0.24.8"
+  }
+}

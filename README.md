@@ -175,6 +175,9 @@ file is sourced automatically. The configured shell must be installed; the plugi
 does not fall back to another dialect. Bash startup files, including `BASH_ENV`,
 are disabled by default. Literal notebook secrets remain plaintext on disk.
 
+For a Tree-sitter response wrapper with JSON injection, see the optional
+[`tree-sitter-curljson`](tree-sitter-curljson/) parser project.
+
 ### Migrating legacy collections
 
 Legacy execution remains the default (`notebook_mode = false`). The formatting
