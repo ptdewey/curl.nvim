@@ -43,6 +43,114 @@ T["setup failure prevents body without errexit"] = function()
   MiniTest.expect.equality(7, result.exit_code)
 end
 
+T["curl defaults apply to setup and body without changing arguments or PATH selection"] = function()
+  local dir = vim.fn.tempname() .. " curl tools"
+  vim.fn.mkdir(dir, "p")
+  local path = dir .. "/curl"
+  vim.fn.writefile({ "#!/bin/sh", "printf '<%s>\\n' \"$@\"" }, path)
+  vim.fn.setfperm(path, "rwx------")
+  local result = run(options(
+    "export PATH=" .. vim.fn.shellescape(dir) .. ':"$PATH"\ncurl "setup url"',
+    [[curl --no-silent --no-show-error 'body url' --data '{"name": "a b"}'; command curl bypass]]
+  ))
+  vim.fn.delete(dir, "rf")
+  MiniTest.expect.equality(0, result.exit_code)
+  MiniTest.expect.equality(
+    table.concat({
+      "<--silent>",
+      "<--show-error>",
+      "<setup url>",
+      "<--silent>",
+      "<--show-error>",
+      "<--no-silent>",
+      "<--no-show-error>",
+      "<body url>",
+      "<--data>",
+      '<{"name": "a b"}>',
+      "<bypass>",
+      "",
+    }, "\n"),
+    result.stdout
+  )
+end
+
+T["curl hides progress by default but retains transport errors and exit status"] = function()
+  local path = vim.fn.tempname()
+  vim.fn.writefile({ "response body" }, path)
+  local url = vim.fn.shellescape("file://" .. path)
+  local success = run(options("", "curl " .. url))
+  local progress = run(options("", "curl --no-silent " .. url, { shell = { "/bin/sh" } }))
+  vim.fn.delete(path)
+  local failure = run(options("", "curl " .. url))
+  local quiet_failure = run(options("", "curl --no-show-error " .. url))
+  MiniTest.expect.equality("response body\n", success.stdout)
+  MiniTest.expect.equality("", success.stderr)
+  MiniTest.expect.equality(0, success.exit_code)
+  MiniTest.expect.equality(success.stdout, progress.stdout)
+  MiniTest.expect.equality(0, progress.exit_code)
+  MiniTest.expect.equality(true, progress.stderr:find("% Total", 1, true) ~= nil)
+  MiniTest.expect.equality("", failure.stdout)
+  MiniTest.expect.equality(true, failure.stderr:find("curl:", 1, true) ~= nil)
+  MiniTest.expect.equality(true, failure.exit_code ~= 0)
+  MiniTest.expect.equality(nil, failure.stderr:find("% Total", 1, true))
+  MiniTest.expect.equality("", quiet_failure.stderr)
+  MiniTest.expect.equality(failure.exit_code, quiet_failure.exit_code)
+end
+
+T["captures expanded request URLs and headers separately from both streams"] = function()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, "p")
+  vim.fn.writefile({ "#!/bin/sh", "printf body; printf warning >&2; exit 7" }, dir .. "/curl")
+  vim.fn.setfperm(dir .. "/curl", "rwx------")
+  local result = run(options(
+    "PATH=" .. vim.fn.shellescape(dir) .. ':"$PATH"\nBASE_URL=https://example.test\nTOKEN="a b"',
+    [[curl --request POST "$BASE_URL/first" -H "Authorization: Bearer $TOKEN" --data-raw 'https://not-a-url'
+curl --url="$BASE_URL/second" --header='X-Test: two' --header='X-Empty:'
+command curl https://bypassed.test]]
+  ))
+  vim.fn.delete(dir, "rf")
+  MiniTest.expect.equality({
+    { urls = { "https://example.test/first" }, headers = { "Authorization: Bearer a b" } },
+    { urls = { "https://example.test/second" }, headers = { "X-Test: two", "X-Empty:" } },
+  }, result.requests)
+  MiniTest.expect.equality("bodybodybody", result.stdout)
+  MiniTest.expect.equality("warningwarningwarning", result.stderr)
+  MiniTest.expect.equality(7, result.exit_code)
+end
+
+T["request metadata is private and cleaned on success failure and launch failure"] = function()
+  for _, scenario in ipairs({
+    { setup = "", body = "sleep 0.1" },
+    { setup = "(exit 7)", body = "true" },
+    { setup = "", body = "true", shell = { "/missing/not-a-shell" } },
+  }) do
+    local paths = {}
+    local original = vim.fn.tempname
+    vim.fn.tempname = function()
+      local path = original()
+      paths[#paths + 1] = path
+      return path
+    end
+    local result
+    local handle, err = runner.start(options(scenario.setup, scenario.body, { shell = scenario.shell }), function(value)
+      result = value
+    end)
+    vim.fn.tempname = original
+    MiniTest.expect.equality(2, #paths)
+    if handle then
+      for _, path in ipairs(paths) do
+        MiniTest.expect.equality(384, vim.uv.fs_stat(path).mode % 512)
+      end
+      assert(vim.wait(5000, function() return result ~= nil end, 10))
+    else
+      assert(err:find("failed to start shell", 1, true), err)
+    end
+    for _, path in ipairs(paths) do
+      MiniTest.expect.equality(nil, vim.uv.fs_stat(path))
+    end
+  end
+end
+
 T["captures multiline streams and does not block"] = function()
   local result
   local done = false
@@ -122,8 +230,10 @@ T["cancels a running process"] = function()
   local marker = vim.fn.tempname()
   local original = vim.fn.tempname
   local script_path
+  local paths = {}
   vim.fn.tempname = function()
     script_path = original()
+    paths[#paths + 1] = script_path
     return script_path
   end
   local handle = runner.start(
@@ -146,7 +256,9 @@ T["cancels a running process"] = function()
   end, 10)
   MiniTest.expect.equality(true, result.cancelled)
   MiniTest.expect.equality(0, vim.fn.filereadable(marker))
-  MiniTest.expect.equality(nil, vim.uv.fs_stat(script_path))
+  for _, path in ipairs(paths) do
+    MiniTest.expect.equality(nil, vim.uv.fs_stat(path))
+  end
 end
 
 return T

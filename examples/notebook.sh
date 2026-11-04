@@ -10,13 +10,13 @@ case "$ENV" in
 esac
 
 ### GET with query parameters
-curl --silent --show-error --max-time 20 \
+curl --max-time 20 \
   --get "$BASE_URL/get" \
   --data-urlencode 'search=hello notebook' \
   --data-urlencode "environment=$ENV"
 
 ### POST literal multiline JSON
-curl --silent --show-error --max-time 20 \
+curl --max-time 20 \
   "$BASE_URL/post" \
   --header 'Content-Type: application/json' \
   --data '{
@@ -27,7 +27,7 @@ curl --silent --show-error --max-time 20 \
 
 ### POST interpolated JSON with a request-local ID
 CUSTOMER_ID=48047
-curl --silent --show-error --max-time 20 \
+curl --max-time 20 \
   "$BASE_URL/post" \
   --header 'Content-Type: application/json' \
   --data @- <<EOF
@@ -39,18 +39,18 @@ curl --silent --show-error --max-time 20 \
 EOF
 
 ### HTTP error with headers and successful process status
-curl --silent --show-error --max-time 20 \
+curl --max-time 20 \
   --include "$BASE_URL/status/404"
 
 ### HTTP error with a nonzero process status
-curl --silent --show-error --max-time 20 \
+curl --max-time 20 \
   --fail-with-body "$BASE_URL/status/418"
 
 ### Slow response for testing CurlCancel
 printf 'Waiting for the response; use :CurlCancel in the source buffer.\n' >&2
-curl --silent --show-error --max-time 30 "$BASE_URL/delay/10"
+curl --max-time 30 "$BASE_URL/delay/10"
 
 ### Transport failure with both output streams
 printf 'This block intentionally connects to a closed local port.\n'
-curl --silent --show-error --connect-timeout 2 --max-time 3 \
+curl --connect-timeout 2 --max-time 3 \
   http://127.0.0.1:1

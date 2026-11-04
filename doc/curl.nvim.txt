@@ -39,10 +39,10 @@ bodies or heredocs. Each section must be a complete shell fragment.
 
     ### Read application
     APPLICATION_ID=48047
-    curl --silent --show-error "$BASE_URL/applications/$APPLICATION_ID"
+    curl "$BASE_URL/applications/$APPLICATION_ID"
 
     ### Create application
-    curl --silent --show-error "$BASE_URL/applications" \
+    curl "$BASE_URL/applications" \
       --header 'Content-Type: application/json' \
       --data '{"name":"Example"}'
 <
@@ -55,7 +55,16 @@ positions, missing markers, or empty/comment-only blocks.
 A final nonzero setup status or explicit exit prevents request execution. Check
 intermediate failures yourself or choose an appropriate shell option; the plugin
 does not enable errexit. Normal shell quotes, continuations, variables and heredocs
-are preserved. Single-quoted bodies are literal. No curl flags are injected.
+are preserved. Single-quoted bodies are literal.
+
+The notebook shell defines curl() to run command curl --silent --show-error
+before your arguments. Progress is hidden by default, but curl errors remain
+visible. Use --no-silent to restore progress or --no-show-error to hide errors.
+Use command curl or an explicit executable path to bypass these defaults, or
+redefine curl() in shared setup. PATH still selects the executable. These defaults
+apply to setup and the selected block, not to running the file in a terminal.
+The same function captures URL and header arguments; bypassing it also skips
+request metadata capture.
 
 Relative paths resolve from the notebook's directory, or Neovim's current directory
 for unnamed buffers. Opening, editing and saving neither run code nor autosave.
@@ -97,11 +106,23 @@ spinner and elapsed seconds, then disappears when the request ends. Otherwise,
 the plugin sends one ordinary vim.notify message when the request starts.
 No percentage is shown because arbitrary shell requests have no known total.
 
-All scripts share one scratch response buffer and reuse its split. Each finished
-request replaces the displayed result with its title, working directory, process
-exit status, elapsed time, stdout, and stderr. Failure preserves both streams.
+All scripts share one temporary scratch response buffer and reuse its split.
+Closing its last window discards the response. On Neovim versions with
+SessionWritePre, saving a session (including via `:restart`) also discards the
+response and its splits so they are not restored. Source buffers are unaffected.
+Each finished request replaces the displayed result with its title, request URLs,
+supplied request headers, elapsed time, stdout, and stderr. URLs and headers reflect
+shell expansion, grouped by curl invocation. Only explicitly supplied headers are shown,
+not curl-generated headers; --header @file remains a file reference. URLs are the
+supplied arguments, not redirect targets or URLs with curl-generated query
+parameters. Options loaded from curl config files are not captured.
+HTTP status appears only when returned in response headers, such as with --include.
+Successful shell exit codes are hidden; failures show Exit code and cancellation
+is marked separately. Failure preserves both streams.
 JSON gets pretty-printing and JSON highlighting, with metadata and stderr
 highlighted separately. Text, invalid JSON and empty responses remain visible.
+The display converts CRLF and bare carriage returns to newlines and removes ANSI
+color/control sequences and terminal title escapes from both streams.
 
 Use curl --include for headers. HTTP error responses may have process status zero
 unless the command uses --fail or a related flag. Shell source selects curl
@@ -119,8 +140,9 @@ The child inherits Neovim's environment but assignments do not mutate the editor
 or persist between invocations. This is not a filesystem or network sandbox.
 
 Default Bash startup files, including BASH_ENV, are disabled. Private temporary
-scripts are removed after success, failure or cancellation. Saved notebook secrets
-are ordinary plaintext. No expanded commands or response bodies are persisted.
+scripts and expanded-argument metadata are removed after success, failure or
+cancellation. Saved notebook secrets are ordinary plaintext. No expanded commands
+or response bodies are persisted.
 
 MIGRATION                                                  *curl.nvim-migration*
 

@@ -17,7 +17,9 @@ other blocks nor previous invocations contribute shell state.
   and cancellation lifecycle. No collection or legacy execution paths.
 - `notebook.lua`: pure source-range extraction using `###` markers.
 - `notebook_runner.lua`: asynchronous shell process, private temporary script,
-  working directory, stream capture, exit status, elapsed time, and cancellation.
+  private argument metadata, working directory, stream capture, exit status,
+  elapsed time, and cancellation.
+- `request.lua`: extract supplied URLs and headers from expanded curl arguments.
 - `buffers.lua`: source-keyed scratch response splits, formatting, and highlighting.
 - `config.lua`: shell argv and response split direction.
 - `notifications.lua`: user-facing notifications.

@@ -50,10 +50,10 @@ esac
 
 ### Read application
 APPLICATION_ID=48047
-curl --silent --show-error "$BASE_URL/applications/$APPLICATION_ID"
+curl "$BASE_URL/applications/$APPLICATION_ID"
 
 ### Create application
-curl --silent --show-error "$BASE_URL/applications" \
+curl "$BASE_URL/applications" \
   --header 'Content-Type: application/json' \
   --data '{
     "name": "Example application"
@@ -93,17 +93,38 @@ spinner and elapsed seconds, then disappears when the request ends. Without it,
 the plugin sends one ordinary `vim.notify` message when the request starts.
 No percentage is shown because arbitrary shell requests have no known total.
 
-All scripts share one scratch response buffer and reuse its split. Each finished
-request replaces the displayed result with its title, working directory, process
-exit status, elapsed time, stdout, and stderr. Both streams remain available after
+All scripts share one temporary scratch response buffer and reuse its split.
+Closing its last window discards the response. On Neovim versions with
+SessionWritePre, saving a session (including via `:restart`) also discards the
+response and its splits so they are not restored. Source buffers are unaffected.
+Each finished request replaces the displayed result with its title, request URLs,
+supplied request headers, elapsed time, stdout, and stderr. URLs and headers reflect
+shell expansion and are grouped by curl invocation. Only explicitly supplied headers
+are shown, not curl-generated headers; `--header @file` remains a file reference.
+HTTP status appears only when returned in response headers (for example, with
+`--include`). Successful shell exit codes are hidden; failures show `Exit code`
+and cancellations are marked separately. Both streams remain available after
 failure. JSON is pretty-printed and receives
 automatic JSON highlighting; metadata and stderr have separate highlighting.
 Other text, invalid JSON, and empty responses remain inspectable.
+The display normalizes CRLF and bare carriage returns to newlines and removes
+ANSI color/control sequences and terminal title escapes from both streams.
 
 Use curl's `--include` when you want headers. HTTP errors and process failures
 are different: a 4xx/5xx response can have exit status zero unless you supply
-`--fail` or a related option. The plugin injects no curl flags and does not select
-or rewrite the curl executable. Choose binaries through your shell source or PATH.
+`--fail` or a related option.
+
+Inside the notebook shell, a `curl` function supplies `--silent --show-error` by
+default: no progress meter, but real errors remain visible. Your arguments follow
+these defaults, so `curl --no-silent` restores progress and `--no-show-error`
+suppresses errors. Use `command curl` or an explicit executable path to bypass
+the defaults entirely, or redefine the function in shared setup. Executable
+selection still follows PATH. These defaults apply to setup and the selected
+block only; running the notebook directly in a terminal is unchanged. The same
+function captures URL and header arguments for display; bypassing it also skips
+request metadata capture. URLs are the supplied arguments, not redirect targets
+or URLs with curl-generated query parameters. Options loaded from curl config
+files are not captured.
 
 One execution may run per source buffer. Cancel or wait before starting another.
 `require("curl").cancel()` cancels the current source's request; pass a source
@@ -138,8 +159,9 @@ mutate Neovim's environment or survive the child. This is not a sandbox for
 filesystem changes, network calls, or other external effects.
 
 The default Bash invocation disables startup files, including `BASH_ENV`.
-Execution uses a private temporary script that is removed after completion,
-failure, or cancellation. No response history or expanded commands are persisted.
+Execution uses a private temporary script and expanded-argument metadata file,
+both removed after completion, failure, or cancellation. No response history or
+expanded commands are persisted.
 Notebook files you save are ordinary plaintext, including any literal secrets.
 
 ## Migration from earlier versions

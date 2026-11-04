@@ -50,7 +50,7 @@ function M.run()
     if not vim.api.nvim_buf_is_valid(bufnr) then
       return
     end
-    buffers.set_notebook_output(bufnr, extracted, cwd, result)
+    buffers.set_notebook_output(bufnr, extracted, result)
     if result.cancelled then
       notify.info("Request cancelled: " .. title)
     elseif result.exit_code ~= 0 then

@@ -2,7 +2,7 @@ local T = MiniTest.new_set()
 local notebook = require("curl.notebook")
 local runner = require("curl.notebook_runner")
 
-T["documented notebook reaches fake curl unchanged"] = function()
+T["documented notebook reaches PATH-selected curl with default flags"] = function()
   local root = vim.fn.tempname() .. " notebook example"
   vim.fn.mkdir(root, "p")
   local fake = root .. "/curl"

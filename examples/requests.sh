@@ -10,11 +10,11 @@ esac
 
 ### Read application
 APPLICATION_ID=48047
-curl --silent --show-error "$APPLICATIONS_URL/$APPLICATION_ID" \
+curl "$APPLICATIONS_URL/$APPLICATION_ID" \
   --header 'X-Cache-Bypass: true'
 
 ### Create application
-curl --silent --show-error --request POST "$APPLICATIONS_URL" \
+curl --request POST "$APPLICATIONS_URL" \
   --header 'Content-Type: application/json' \
   --data '{
     "requestType": "lease-bav",
@@ -23,7 +23,7 @@ curl --silent --show-error --request POST "$APPLICATIONS_URL" \
 
 ### Update application with interpolated payload
 APPLICATION_ID=48047
-curl --silent --show-error --request PATCH "$APPLICATIONS_URL/$APPLICATION_ID" \
+curl --request PATCH "$APPLICATIONS_URL/$APPLICATION_ID" \
   --header 'Content-Type: application/json' --data @- <<EOF
 {
   "applicationId": "$APPLICATION_ID",

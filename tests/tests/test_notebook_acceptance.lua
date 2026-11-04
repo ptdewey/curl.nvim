@@ -13,7 +13,7 @@ local T = MiniTest.new_set({
         return buf
       end
       function result()
-        local output = vim.fn.bufnr("Curl notebook output")
+        local output = require("tests.helpers").output_buf()
         return output ~= -1 and table.concat(vim.api.nvim_buf_get_lines(output, 0, -1, false), "\n") or nil
       end
       function execute()
@@ -51,7 +51,7 @@ T["unsaved environment selection and local assignments stay isolated on success 
     })
     vim.api.nvim_win_set_cursor(0, { 5, 0 })
     out = execute()
-    assert(out:find("Status: 7", 1, true), out)
+    assert(out:find("Exit code: 7", 1, true), out)
     assert(out:find("before\nfailure\n", 1, true), out)
     assert(out:find("setup\nerror\n", 1, true), out)
     assert(not out:find("MUST_NOT_RUN", 1, true), out)
@@ -74,12 +74,12 @@ T["overlap rejected and concurrent sources share the most recently finished resu
     source({ "### other", "printf independent" })
     local out = execute()
     assert(out:find("independent", 1, true), out)
-    local output = vim.fn.bufnr("Curl notebook output")
+    local output = require("tests.helpers").output_buf()
     local output_win = vim.fn.win_findbuf(output)[1]
     require("curl").cancel(first)
-    assert(vim.wait(5000, function() return result():find("Status: cancelled", 1, true) ~= nil end, 10))
+    assert(vim.wait(5000, function() return result():find("\nCancelled\n", 1, true) ~= nil end, 10))
     assert(not result():find("finished", 1, true), result())
-    assert(vim.fn.bufnr("Curl notebook output") == output)
+    assert(require("tests.helpers").output_buf() == output)
     assert(vim.deep_equal(vim.fn.win_findbuf(output), { output_win }))
   ]=])
 end
@@ -88,7 +88,7 @@ T["switching scripts reuses the shared output buffer and split"] = function()
   child.lua([=[
     local first = source({ "### first", [[printf '{"first":true}']] })
     execute()
-    local output = vim.fn.bufnr("Curl notebook output")
+    local output = require("tests.helpers").output_buf()
     local output_win = vim.fn.win_findbuf(output)[1]
     local source_win = vim.api.nvim_get_current_win()
     local windows = #vim.api.nvim_list_wins()
@@ -97,7 +97,7 @@ T["switching scripts reuses the shared output buffer and split"] = function()
     assert(out:find("Request: second", 1, true), out)
     assert(out:find("stdout:\nsecond_result", 1, true), out)
     assert(not out:find('"first"', 1, true), out)
-    assert(vim.fn.bufnr("Curl notebook output") == output)
+    assert(require("tests.helpers").output_buf() == output)
     assert(vim.deep_equal(vim.fn.win_findbuf(output), { output_win }))
     assert(#vim.api.nvim_list_wins() == windows)
     assert(vim.api.nvim_get_current_win() == source_win)
@@ -146,9 +146,34 @@ T["relative input files resolve from an unsaved named source directory"] = funct
     local buf = source({ "### relative", "cat body.txt; pwd" })
     vim.api.nvim_buf_set_name(buf, root .. "/unsaved.curl")
     local out = execute()
-    assert(out:find("relative body\n" .. root, 1, true), out)
+    assert(out:find("relative body\n" .. vim.uv.fs_realpath(root), 1, true), out)
     assert(vim.fn.filereadable(root .. "/unsaved.curl") == 0, "source autosaved")
     vim.fn.delete(root, "rf")
+  ]=])
+end
+
+T["selected curl request shows expanded URL and headers without directory or empty status"] = function()
+  child.lua([=[
+    local root = vim.fn.tempname() .. " fake tools"
+    vim.fn.mkdir(root, "p")
+    vim.fn.writefile({ "#!/bin/sh", [[printf '{"ok":true}']] }, root .. "/curl")
+    vim.fn.setfperm(root .. "/curl", "rwx------")
+    source({
+      "PATH=" .. vim.fn.shellescape(root) .. ':"$PATH"',
+      "BASE_URL=https://example.test/api", "TOKEN='a b'",
+      "### skipped", "curl https://wrong.test",
+      "### selected", [[curl --request POST "$BASE_URL/48047" --header "Authorization: Bearer $TOKEN" --header 'Content-Type: application/json' --data '{"requestType":"lease-bav"}']],
+      "### also skipped", "curl https://also-wrong.test",
+    }, 7)
+    local out = execute()
+    vim.fn.delete(root, "rf")
+    assert(out:find("Request: selected\nURL: https://example.test/api/48047\nHeaders:\n  Authorization: Bearer a b\n  Content-Type: application/json\n", 1, true), out)
+    assert(out:find('  "ok": true', 1, true), out)
+    assert(not out:find("Directory:", 1, true), out)
+    assert(not out:find("Status:", 1, true), out)
+    assert(not out:find("Exit code:", 1, true), out)
+    assert(not out:find("wrong.test", 1, true), out)
+    assert(not out:find("requestType", 1, true), out)
   ]=])
 end
 
